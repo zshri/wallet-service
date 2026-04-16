@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: wallet-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: wallet-app
+    ports:
+      - "${APP_PORT}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SERVER_PORT: 8080
+    depends_on:
+      db:
+        condition: service_healthy
+
+  k6:
+    image: grafana/k6:latest
+    container_name: wallet-k6
+    volumes:
+      - ./k6/scripts:/scripts
+      - ./k6/data:/data
+      - ./k6/results:/results
+    environment:
+      - TARGET_URL=http://app:8080
+#    depends_on:
+#      app:
+#        condition: service_healthy
+    entrypoint: /bin/sh
+    command: -c "tail -f /dev/null"
+
+volumes:
+  postgres_data:
